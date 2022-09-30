@@ -639,7 +639,7 @@ def _get_user_by_criteria(id_, email):
 
 
 def _validate_password(ctx, param, value):
-    if len(value) < 6:
+    if value is not None and len(value) < 6:
         click.secho("ERROR: Password length must be at least 6 characters", fg="red")
         sys.exit(1)
     return value
@@ -656,7 +656,7 @@ def is_valid_email(value: str) -> bool:  # noqa: D103
 
 def _validate_email(ctx, param, value):
     """Validate email callback for click CLI option."""
-    if not is_valid_email(value):
+    if value is not None and not is_valid_email(value):
         click.secho("ERROR: Invalid email format", fg="red")
         sys.exit(1)
     return value

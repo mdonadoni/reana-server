@@ -18,6 +18,8 @@ from typing import List, Optional
 import click
 import tablib
 from flask.cli import with_appcontext
+from flask_security.recoverable import hash_password
+from invenio_accounts.models import User as InvenioUser
 from invenio_accounts.utils import register_user
 from reana_commons.config import REANAConfig, REANA_RESOURCE_HEALTH_COLORS
 from reana_commons.email import send_email
@@ -175,6 +177,106 @@ def create_user(ctx, email, user_access_token, admin_access_token):
             click.style("User could not be created: \n{}".format(str(e)), fg="red"),
             err=True,
         )
+
+
+def edit_user(
+    reana_user: User,
+    invenio_user: InvenioUser,
+    email: Optional[str],
+    full_name: Optional[str],
+    password: Optional[str],
+    username: Optional[str],
+):
+
+    if email:
+        # TODO: send email to validate new address and print warning
+        # TODO: should we invalidate the user tokens?
+        reana_user.email = email
+        invenio_user.email = email
+    if full_name:
+        # TODO: invenio-userprofiles?
+        reana_user.full_name = full_name
+    if password:
+        # TODO: decide whether we want to support changing passwords
+        # TODO: should we invalidate the user tokens?
+        invenio_user.password = hash_password(password)
+    if username:
+        # TODO: invenio-userprofiles?
+        reana_user.username = username
+
+    Session.add(reana_user)
+    Session.add(invenio_user)
+    Session.commit()
+
+
+@reana_admin.command("user-edit")
+@click.option("--with-id", "id_", help="The UUID of the user to be edited.")
+@click.option("--with-email", "email", help="The email of the user to be edited.")
+@click.option(
+    "--set-email", help="The new email of the user.", callback=_validate_email
+)
+@click.option("--set-full-name", help="The new full name of the user.")
+@click.option(
+    "--set-password", help="The new password of the user.", callback=_validate_password
+)
+@click.option(
+    "--set-username", help="The new username of the user."
+)  # TODO: validation
+@with_appcontext
+def user_edit(id_, email, set_email, set_full_name, set_password, set_username):
+    """Edit an existing user.
+
+    The options ``--with-id`` and ``--with-email`` are mutually exclusive,
+    but one of them must be specified.
+    """
+
+    if not id_ and not email:
+        click.secho(
+            "One option between ``--with-id`` and ``--with-email`` must be specified.",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
+    if id_ and email:
+        click.secho(
+            "Options ``--with-id`` and ``--with-email`` are mutually exclusive.",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
+
+    try:
+        reana_user = _get_user_by_criteria(id_, email)
+        if not reana_user:
+            click.secho("REANA user not found", fg="red", err=True)
+            sys.exit(1)
+        click.echo(f"Found REANA user {reana_user.id_} ({reana_user.email})")
+
+        invenio_user: Optional[InvenioUser] = (
+            Session.query(InvenioUser).filter_by(email=reana_user.email).one_or_none()
+        )
+        if not invenio_user:
+            click.secho(
+                f"Invenio user not found with email '{reana_user.email}'",
+                fg="red",
+                err=True,
+            )
+            sys.exit(1)
+        click.echo(f"Found Invenio user {invenio_user.id} ({invenio_user.email})")
+
+        edit_user(
+            reana_user,
+            invenio_user,
+            email=set_email,
+            full_name=set_full_name,
+            password=set_password,
+            username=set_username,
+        )
+        click.secho("User successfully updated.", fg="green")
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        click.secho(f"Something went wrong while editing user: {e}", fg="red", err=True)
+        sys.exit(1)
 
 
 @reana_admin.command("user-export")
