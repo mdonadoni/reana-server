@@ -1,0 +1,28 @@
+# This file is part of REANA.
+# Copyright (C) 2023 CERN.
+#
+# REANA is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+
+name: release-docker
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  # TODO: specify that releasing should be done after CI passes
+  # TODO: consider moving this to the CI if needed to enforce dependency on CI success
+  release-docker:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Release docker image
+        # TODO update this reference to v1 after testing
+        # TODO update this reference to reanahub instead of mdonadoni after testing
+        uses: mdonadoni/reana-github-actions/release-docker@release-docker
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          # TODO: change to reanahub after testing
+          organisation: madonado-test
